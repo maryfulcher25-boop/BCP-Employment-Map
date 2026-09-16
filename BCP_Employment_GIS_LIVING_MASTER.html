@@ -1,0 +1,290 @@
+<!doctype html>
+<html>
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Brick Church Pike — Living Employment & Property Map</title>
+<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css">
+<style>
+html,body,#map{height:100%;margin:0}
+body{font-family:Arial,Helvetica,sans-serif;color:#222}
+#map{background:#eee}
+#panel{position:absolute;z-index:1000;right:12px;top:12px;width:430px;max-height:calc(100vh - 24px);overflow:auto;background:#fff;padding:15px;border-radius:8px;box-shadow:0 3px 20px #0004}
+h1{font-size:19px;margin:0 0 3px}.sub{font-size:11px;color:#666;line-height:1.4}
+h2{font-size:11px;text-transform:uppercase;letter-spacing:.08em;margin:17px 0 7px;color:#555}
+button{padding:7px 9px;margin:2px;border:1px solid #aaa;background:#fff;border-radius:4px;font-size:11px;cursor:pointer}
+button:hover{background:#f2f2f2}button.dark{background:#222;color:#fff;border-color:#222}button.blue{background:#1769aa;color:#fff;border-color:#1769aa}
+button.red{color:#b21f1f;border-color:#d99;background:#fff8f8}
+.toolbar{display:flex;flex-wrap:wrap;gap:3px}
+#search{width:100%;box-sizing:border-box;padding:8px;border:1px solid #aaa;border-radius:4px}
+table{width:100%;border-collapse:collapse;font-size:10px}
+th{position:sticky;top:0;background:#f4f4f4;text-align:left;padding:6px;border-bottom:1px solid #ccc}
+td{padding:6px;border-bottom:1px solid #eee;vertical-align:top}
+tr:hover{background:#f8f8f8}.name{font-weight:bold;font-size:10.5px}.addr{color:#666;margin-top:2px}
+.jobs{font-weight:bold;white-space:nowrap}.status{color:#555}
+.actions{white-space:nowrap}
+.actions button{padding:4px 6px;font-size:10px}
+.badge{display:inline-block;padding:2px 5px;border-radius:10px;background:#eee;font-size:9px}
+.subjectRow{background:#fff4f4}
+.note{font-size:10.5px;line-height:1.4;background:#f3f4f6;padding:8px;border-radius:5px;color:#555}
+#count{font-size:10px;color:#666;margin:6px 0}
+.modal{position:fixed;inset:0;background:#0006;z-index:3000;display:none;align-items:center;justify-content:center}
+.form{width:420px;max-width:calc(100vw - 30px);max-height:90vh;overflow:auto;background:#fff;border-radius:8px;padding:16px;box-shadow:0 6px 35px #0007}
+.formHead{display:flex;justify-content:space-between;align-items:center;font-size:16px;margin-bottom:8px}
+.formHead button{border:0;font-size:20px;padding:0}
+label{display:block;font-size:10px;font-weight:bold;margin:8px 0}
+input,textarea,select{width:100%;box-sizing:border-box;padding:7px;border:1px solid #aaa;border-radius:4px;margin-top:4px;font:11px Arial}
+textarea{min-height:65px;resize:vertical}.two{display:grid;grid-template-columns:1fr 1fr;gap:8px}
+.formActions{text-align:right;margin-top:12px}
+.maplabel{background:#fff;border:1px solid #555;border-radius:5px;padding:4px 7px;box-shadow:0 1px 5px #0005;font:11px Arial;white-space:nowrap;max-width:210px}
+.maplabel b{font-size:11px}.maplabel .lj{font-weight:bold;font-size:10px;color:#444;margin-top:2px}
+.maplabel.future{border-color:#d97706;background:#fff9ef}.maplabel.subject{border:2px solid #c62828;background:#fff4f4}
+.leaflet-div-icon{background:transparent;border:0}
+.leaflet-popup-content{min-width:270px}
+.small{font-size:10px;color:#666}
+</style>
+</head>
+<body>
+<div id="map"></div>
+
+<div id="panel">
+<h1>Brick Church Pike Living Map</h1>
+<div class="sub"><b>Subject:</b> 3309 Brick Church Pike, Nashville, TN 37207</div>
+
+<h2>Manage Map</h2>
+<div class="toolbar">
+<button class="dark" id="dragBtn" onclick="toggleDrag()">Edit Locations</button>
+<button class="blue" onclick="openForm()">+ Add Property</button>
+<button onclick="removeDuplicates()">Remove Exact Duplicates</button>
+<button onclick="saveNow()">Save</button>
+<button onclick="exportJSON()">Export Data</button>
+<button class="red" onclick="resetMap()">Reset to Original</button>
+</div>
+<div class="note" style="margin-top:7px">
+This is the master living map. Use the table below to edit or delete records. Add new properties at any time. In <b>Edit Locations</b> mode, drag the complete business label on the map; its location and record stay together.
+</div>
+
+<h2>View</h2>
+<div class="toolbar">
+<button onclick="subjectView()">Subject</button>
+<button onclick="allView()">All Properties</button>
+</div>
+
+<h2>Property / Employer Database</h2>
+<input id="search" placeholder="Search business, address, status, or use…">
+<div id="count"></div>
+<div id="tableWrap"></div>
+</div>
+
+<div id="modal" class="modal">
+<div class="form">
+<div class="formHead"><b id="formTitle">Add Property</b><button onclick="closeForm()">×</button></div>
+<label>Business / Project<input id="fName"></label>
+<label>Address<input id="fAddress"></label>
+<div class="two">
+<label>Estimated Jobs<input id="fJobs" type="number" min="0" step="1" placeholder="TBD"></label>
+<label>Status<input id="fStatus" placeholder="Existing / planned / future"></label>
+</div>
+<label>Use<input id="fUse" placeholder="Industrial / office / school / etc."></label>
+<div class="two">
+<label>Latitude<input id="fLat" type="number" step="0.000001"></label>
+<label>Longitude<input id="fLon" type="number" step="0.000001"></label>
+</div>
+<label>Notes<textarea id="fNotes" placeholder="Optional notes"></textarea></label>
+<div class="formActions">
+<button onclick="closeForm()">Cancel</button>
+<button class="blue" onclick="submitForm()">Save Property</button>
+</div>
+<div class="small">Coordinates can be fine-tuned later by dragging the complete label in Edit Locations mode.</div>
+</div>
+</div>
+
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+<script>
+const ORIGINAL = [{"Project / Employer": "444 Brick Church Park Dr occupants", "Address": "444 Brick Church Park Dr, Nashville, TN 37207", "Approx. Drive": "~4–6 min", "Status": "Existing / operating", "SF": null, "Use": "Industrial / warehouse", "Base Jobs": null, "Jobs Basis": "Building occupants need parcel/tenant reconciliation before assigning employment", "Job Confidence": "Low", "Research Notes": "Web-verified Sept. 2026; see Job Research for source detail where available.", "Campus / Park": "Brick Church Business Park", "Counting Treatment": "BUILDING RECORD — tenant reconciliation needed", "Verification Source": "444 is Lot 3, Brick Church Business Park Phase 1", "_lat": 36.22644, "_lon": -86.78529, "_id": 1}, {"Project / Employer": "565 Brick Church Park Dr / industrial tenants", "Address": "565 Brick Church Park Dr, Nashville, TN 37207", "Approx. Drive": "~4–6 min", "Status": "Existing / operating", "SF": null, "Use": "Industrial / medical parts operations", "Base Jobs": null, "Jobs Basis": "Building-level record retained separately; avoid double counting AllParts", "Job Confidence": "Low", "Research Notes": "Web-verified Sept. 2026; see Job Research for source detail where available.", "Campus / Park": "Brick Church Business Park", "Counting Treatment": "BUILDING RECORD — do not count separately from AllParts", "Verification Source": "565 is Brick Church Business Park; AllParts is tenant", "_lat": 36.2246, "_lon": -86.7827, "_id": 2}, {"Project / Employer": "AllParts Medical", "Address": "400 Brick Church Park Dr, Nashville, TN 37207", "Approx. Drive": "~4–6 min", "Status": "Existing / operating", "SF": 75000, "Use": "Medical imaging parts distribution / technical support / training", "Base Jobs": 72, "Jobs Basis": "Current LinkedIn employee count; company operates two Nashville facilities", "Job Confidence": "Medium", "Research Notes": "Web-verified Sept. 2026; see Job Research for source detail where available.", "Campus / Park": "Brick Church Business Park", "Counting Treatment": "KEEP employer once; do not add park aggregate", "Verification Source": "AllParts at 400 and 565; 565 is in Brick Church Business Park", "_lat": 36.2249, "_lon": -86.78279, "_id": 3}, {"Project / Employer": "AllParts Medical", "Address": "565 Brick Church Park Dr, Nashville, TN 37207", "Approx. Drive": "~4–6 min", "Status": "Existing / operating", "SF": 75000, "Use": "Medical imaging parts distribution / technical support / training", "Base Jobs": 72, "Jobs Basis": "Current LinkedIn employee count; company operates two Nashville facilities", "Job Confidence": "Medium", "Research Notes": "Web-verified Sept. 2026; see Job Research for source detail where available.", "Campus / Park": "Brick Church Business Park", "Counting Treatment": "KEEP employer once; do not add park aggregate", "Verification Source": "AllParts at 400 and 565; 565 is in Brick Church Business Park", "_lat": 36.2246, "_lon": -86.7827, "_id": 4}, {"Project / Employer": "American Adjustables", "Address": "2618 Brick Church Pike, Nashville, TN 37207", "Approx. Drive": "~3–5 min", "Status": "Existing / operating", "SF": null, "Use": "Furniture manufacturing / distribution", "Base Jobs": null, "Jobs Basis": "Local operation confirmed; headcount not publicly verified", "Job Confidence": "Low", "Research Notes": "Web-verified Sept. 2026; see Job Research for source detail where available.", "Campus / Park": null, "Counting Treatment": null, "Verification Source": null, "_lat": 36.2169, "_lon": -86.781, "_id": 7}, {"Project / Employer": "Brennan – Whites Creek", "Address": "7435 Old Hickory Blvd, Whites Creek, TN 37189", "Status": "Preliminary / future", "Base Jobs": 150, "Jobs Basis": "Working estimate", "Job Confidence": "Medium", "Use": "Industrial / distribution", "Counting Treatment": "Preliminary; check against Old Hickory Logistics Center.", "_lat": 36.27, "_lon": -86.65, "_id": 8}, {"Project / Employer": "Cintas Uniform Services", "Address": "3400 Briley Park Blvd N, Nashville, TN 37207", "Approx. Drive": "~6–8 min", "Status": "Existing / operating", "SF": null, "Use": "Uniform rental / laundry / route service", "Base Jobs": 88, "Jobs Basis": "Third-party Nashville location employee count; location-specific estimate", "Job Confidence": "Medium", "Research Notes": "Web-verified Sept. 2026; see Job Research for source detail where available.", "Campus / Park": "Briley Park / outside the two park aggregates", "Counting Treatment": "KEEP employer", "Verification Source": "3400 Briley Park Blvd N", "_lat": 36.2444, "_lon": -86.7826, "_id": 9}, {"Project / Employer": "DCR Nashville", "Address": "500 Brick Church Park Dr, Nashville, TN 37207", "Approx. Drive": "~4–6 min", "Status": "Existing / operating", "SF": null, "Use": "Audio-visual / event production / equipment rental", "Base Jobs": null, "Jobs Basis": "Local facility confirmed; headcount not publicly verified", "Job Confidence": "Low", "Research Notes": "Web-verified Sept. 2026; see Job Research for source detail where available.", "Campus / Park": "Brick Church Business Park", "Counting Treatment": "KEEP employer; do not add park aggregate", "Verification Source": "500 Brick Church Park Dr", "_lat": 36.22721, "_lon": -86.78636, "_id": 10}, {"Project / Employer": "DNS LLC", "Address": "2624 Brick Church Pike, Nashville, TN 37207", "Approx. Drive": "~3–5 min", "Status": "Existing / verify", "SF": null, "Use": "Cable / telecommunications", "Base Jobs": null, "Jobs Basis": "Address/business relationship needs further parcel-level verification", "Job Confidence": "Low", "Research Notes": "Web-verified Sept. 2026; see Job Research for source detail where available.", "Campus / Park": null, "Counting Treatment": null, "Verification Source": null, "_lat": 36.2174, "_lon": -86.7808, "_id": 11}, {"Project / Employer": "EDMO Distributors", "Address": "2606 Brick Church Pike, Nashville, TN 37207", "Approx. Drive": "~3–5 min", "Status": "Existing / operating", "SF": null, "Use": "Aviation electronics / aircraft parts distribution", "Base Jobs": null, "Jobs Basis": "Company-wide size is 11–50; Nashville site-specific headcount not verified", "Job Confidence": "Low", "Research Notes": "Web-verified Sept. 2026; see Job Research for source detail where available.", "Campus / Park": null, "Counting Treatment": null, "Verification Source": null, "_lat": 36.2158, "_lon": -86.781, "_id": 12}, {"Project / Employer": "Ed's Supply Co. / Nashville Distribution Center", "Address": "540 Brick Church Park Dr, Nashville, TN 37207", "Approx. Drive": "~4–6 min", "Status": "Existing / operating", "SF": null, "Use": "HVAC/R wholesale distribution / training", "Base Jobs": null, "Jobs Basis": "Distribution center confirmed; local headcount not publicly verified", "Job Confidence": "Low", "Research Notes": "Web-verified Sept. 2026; see Job Research for source detail where available.", "Campus / Park": "Brick Church Business Park", "Counting Treatment": "KEEP employer; do not add park aggregate", "Verification Source": "540 Brick Church Park Dr", "_lat": 36.22685, "_lon": -86.79024, "_id": 13}, {"Project / Employer": "FedEx Ground – 3301 Knight Dr", "Address": "3301 Knight Dr", "Approx. Drive": "~7–10 min", "Status": "Existing / operating", "SF": 230000, "Use": "Package distribution / logistics", "Base Jobs": 250, "Jobs Basis": "Modeled midpoint; current facility headcount not publicly verified", "Job Confidence": "Medium-Low", "Research Notes": "Web-verified Sept. 2026; see Job Research for source detail where available.", "Campus / Park": null, "Counting Treatment": null, "Verification Source": null, "_lat": 36.23194, "_lon": -86.80388, "_id": 14}, {"Project / Employer": "Fiserv", "Address": "575 Brick Church Park Dr, Nashville, TN 37207", "Approx. Drive": "~4–6 min", "Status": "Existing / operating", "SF": 51528, "Use": "Payment-card manufacturing / print production", "Base Jobs": 103, "Jobs Basis": "Third-party local estimate; active production operation", "Job Confidence": "Medium", "Research Notes": "Web-verified Sept. 2026; see Job Research for source detail where available.", "Campus / Park": "Brick Church Business Park", "Counting Treatment": "KEEP employer; do not add park aggregate", "Verification Source": "575 Brick Church Park Dr", "_lat": 36.2248, "_lon": -86.787, "_id": 15}, {"Project / Employer": "Fleetco", "Address": "3003 Brick Church Pike, Nashville, TN 37207", "Approx. Drive": "~5–7 min", "Status": "Existing / operating", "SF": null, "Use": "Trailer sales / parts / repair / service", "Base Jobs": null, "Jobs Basis": "Nashville corporate site confirmed; company size 11–50 is not location-specific", "Job Confidence": "Low", "Research Notes": "Web-verified Sept. 2026; see Job Research for source detail where available.", "Campus / Park": null, "Counting Treatment": null, "Verification Source": null, "_lat": 36.22905, "_lon": -86.77911, "_id": 17}, {"Project / Employer": "Gipson Mechanical Contractor", "Address": "568 Brick Church Park Dr, Nashville, TN 37207", "Approx. Drive": "~4–6 min", "Status": "Existing / operating", "SF": null, "Use": "Commercial / industrial mechanical contractor", "Base Jobs": 23, "Jobs Basis": "LinkedIn currently shows 23 employees company-wide; local headcount may be lower", "Job Confidence": "Medium-Low", "Research Notes": "Web-verified Sept. 2026; see Job Research for source detail where available.", "Campus / Park": "Brick Church Business Park", "Counting Treatment": "KEEP employer; do not add park aggregate", "Verification Source": "568 Brick Church Park Dr", "_lat": 36.22457, "_lon": -86.78625, "_id": 18}, {"Project / Employer": "Gresco Utility Supply", "Address": "448 Brick Church Park Dr, Nashville, TN 37207", "Approx. Drive": "~4–6 min", "Status": "Existing / operating", "SF": null, "Use": "Utility electrical equipment / warehouse / distribution", "Base Jobs": null, "Jobs Basis": "Nashville warehouse confirmed; local headcount not publicly verified", "Job Confidence": "Low", "Research Notes": "Web-verified Sept. 2026; see Job Research for source detail where available.", "Campus / Park": "Brick Church Business Park", "Counting Treatment": "KEEP employer; do not add park aggregate", "Verification Source": "448 Brick Church Park Dr", "_lat": 36.2266, "_lon": -86.7858, "_id": 19}, {"Project / Employer": "Iron Mountain", "Address": "415 Brick Church Park Dr, Nashville, TN 37207", "Approx. Drive": "~4–6 min", "Status": "Existing / operating", "SF": null, "Use": "Records / document / specialty storage and logistics", "Base Jobs": null, "Jobs Basis": "Nashville facility confirmed; local headcount not publicly verified", "Job Confidence": "Low", "Research Notes": "Web-verified Sept. 2026; see Job Research for source detail where available.", "Campus / Park": "Brick Church Business Park", "Counting Treatment": "KEEP employer; do not add park aggregate", "Verification Source": "415 Brick Church Park Dr", "_lat": 36.226, "_lon": -86.7842, "_id": 20}, {"Project / Employer": "KIPP Nashville College Prep", "Address": "3410 Knight Dr, Nashville, TN 37207", "Approx. Drive": "~7–9 min", "Status": "Existing / operating", "SF": null, "Use": "Public charter school (K-4 elementary + 5-8 middle at campus)", "Base Jobs": null, "Jobs Basis": "Current campus enrollment is documented; employee count not separately verified", "Job Confidence": "Low", "Research Notes": "Web-verified Sept. 2026; see Job Research for source detail where available.", "Campus / Park": "Separate major employer", "Counting Treatment": "KEEP employer", "Verification Source": "3410 Knight Dr", "_lat": 36.2416, "_lon": -86.8002, "_id": 21}, {"Project / Employer": "Lipman Brothers", "Address": "2815 Brick Church Pike", "Approx. Drive": "~3–5 min", "Status": "Existing / operating", "SF": 375000, "Use": "Beverage distribution / HQ", "Base Jobs": 201, "Jobs Basis": "Lower bound of 201–500 company size; local count not verified", "Job Confidence": "Medium", "Research Notes": "Web-verified Sept. 2026; see Job Research for source detail where available.", "Campus / Park": "Skyline area — separate parcel/employer", "Counting Treatment": "KEEP employer; do not add Skyline aggregate", "Verification Source": "Lipman: 375,000 SF at 2815 Brick Church Pike", "_lat": 36.2248, "_lon": -86.7807, "_id": 22}, {"Project / Employer": "M&M Distributors", "Address": "2622 Brick Church Pike, Nashville, TN 37207", "Approx. Drive": "~3–5 min", "Status": "Potential duplicate / verify", "SF": null, "Use": "Wholesale distribution", "Base Jobs": null, "Jobs Basis": "Older directory listing appears to share address with Ram Distributors; do not count separately", "Job Confidence": "Low", "Research Notes": "Web-verified Sept. 2026; see Job Research for source detail where available.", "Campus / Park": null, "Counting Treatment": null, "Verification Source": null, "_lat": 36.2172, "_lon": -86.7809, "_id": 23}, {"Project / Employer": "Nashville Auto Diesel College ", "Address": "2813 Brick Church Pike, Nashville, TN 37207", "Approx. Drive": "~3–5 min", "Status": "Existing / operating", "SF": null, "Use": "Career / technical college", "Base Jobs": 107, "Jobs Basis": "Current LinkedIn employee count; campus-level count not independently verified", "Job Confidence": "Medium", "Research Notes": "Web-verified Sept. 2026; see Job Research for source detail where available.", "Campus / Park": "Skyline Distribution Park — Building B / 2813", "Counting Treatment": "KEEP employer; do not add Skyline aggregate", "Verification Source": "2813 is Skyline Building B; NADC confirms address", "_lat": 36.2246, "_lon": -86.7808, "_id": 24}, {"Project / Employer": "Nashville Record Pressing", "Address": "520 Brick Church Park Dr", "Approx. Drive": "~4–6 min", "Status": "Existing / ramp-up", "SF": null, "Use": "Vinyl manufacturing / distribution / HQ", "Base Jobs": 255, "Jobs Basis": "Jobs committed over five years; keep separate from campus aggregate until parcel reconciliation", "Job Confidence": "High", "Research Notes": "Web-verified Sept. 2026; see Job Research for source detail where available.", "Campus / Park": "Brick Church Business Park", "Counting Treatment": "KEEP employer; do not add park aggregate", "Verification Source": "520 Brick Church Park Dr", "_lat": 36.22808, "_lon": -86.78882, "_id": 25}, {"Project / Employer": "Old Hickory Logistics Center", "Address": "7435 Old Hickory Blvd", "Approx. Drive": "~8–10 min", "Status": "Under construction; 2027", "SF": 209549, "Use": "Class A industrial / distribution", "Base Jobs": 150, "Jobs Basis": "Preliminary future midpoint; tenant-dependent", "Job Confidence": "Low", "Research Notes": "Web-verified Sept. 2026; see Job Research for source detail where available.", "Campus / Park": null, "Counting Treatment": null, "Verification Source": null, "_lat": 36.27, "_lon": -86.65, "_id": 26}, {"Project / Employer": "Pavilion Church", "Address": "535 Brick Church Park Dr, Nashville, TN 37207", "Approx. Drive": "~4–6 min", "Status": "Existing / operating", "SF": null, "Use": "Church / community / ministry", "Base Jobs": null, "Jobs Basis": "Facility confirmed; employment not estimated", "Job Confidence": "Low", "Research Notes": "Web-verified Sept. 2026; see Job Research for source detail where available.", "Campus / Park": "Brick Church Business Park area", "Counting Treatment": "KEEP only if employment is verified; do not add park aggregate", "Verification Source": "535 Brick Church Park Dr", "_lat": 36.22412, "_lon": -86.78664, "_id": 27}, {"Project / Employer": "Prisma Nashville", "Address": "2947 Brick Church Pike", "Approx. Drive": "~4–6 min", "Status": "Existing / expanded", "SF": 109000, "Use": "Printing / production / fulfillment / marketing logistics", "Base Jobs": 109, "Jobs Basis": "New jobs committed at Nashville facility", "Job Confidence": "High", "Research Notes": "Web-verified Sept. 2026; see Job Research for source detail where available.", "Campus / Park": null, "Counting Treatment": null, "Verification Source": null, "_lat": 36.224, "_lon": -86.784, "_id": 28}, {"Project / Employer": "Production Row – approved plan", "Address": "4808 Buena Vista Pike area", "Approx. Drive": "~8–10 min", "Status": "Approved / planned", "SF": 609700, "Use": "Warehouse / light manufacturing / flex office", "Base Jobs": 400, "Jobs Basis": "Preliminary future midpoint; possible overlap with Rock Nashville; exclude from totals until reconciled", "Job Confidence": "Low", "Research Notes": "Web-verified Sept. 2026; see Job Research for source detail where available.", "Campus / Park": null, "Counting Treatment": null, "Verification Source": null, "_lat": 36.22, "_lon": -86.855, "_id": 29}, {"Project / Employer": "Quest Events", "Address": "3300 Briley Park Blvd, Nashville, TN 37207", "Approx. Drive": "~6–8 min", "Status": "Existing / operating", "SF": null, "Use": "Event production / rental / scenic décor / warehouse", "Base Jobs": null, "Jobs Basis": "Nashville location confirmed; local headcount not separately verified", "Job Confidence": "Low", "Research Notes": "Web-verified Sept. 2026; see Job Research for source detail where available.", "Campus / Park": "Briley Park / outside the two park aggregates", "Counting Treatment": "KEEP employer", "Verification Source": "3300 Briley Park Blvd", "_lat": 36.2431, "_lon": -86.7837, "_id": 30}, {"Project / Employer": "Ram Distributors", "Address": "2622 Brick Church Pike, Nashville, TN 37207", "Approx. Drive": "~3–5 min", "Status": "Existing / operating", "SF": null, "Use": "Wholesale tobacco / convenience-store / grocery distribution", "Base Jobs": null, "Jobs Basis": "Current company site confirms address; local headcount not verified", "Job Confidence": "Low", "Research Notes": "Web-verified Sept. 2026; see Job Research for source detail where available.", "Campus / Park": null, "Counting Treatment": null, "Verification Source": null, "_lat": 36.2172, "_lon": -86.7809, "_id": 31}, {"Project / Employer": "Ratermann Manufacturing", "Address": "566 Brick Church Park Dr, Nashville, TN 37207", "Approx. Drive": "~4–6 min", "Status": "Existing / operating", "SF": null, "Use": "Cryogenic / compressed-gas equipment distribution", "Base Jobs": null, "Jobs Basis": "Nashville distribution center confirmed; company-wide 51–200 employees is not location-specific", "Job Confidence": "Low", "Research Notes": "Web-verified Sept. 2026; see Job Research for source detail where available.", "Campus / Park": "Brick Church Business Park", "Counting Treatment": "KEEP employer; do not add park aggregate", "Verification Source": "566 Brick Church Park Dr", "_lat": 36.2247, "_lon": -86.7857, "_id": 32}, {"Project / Employer": "Republic High School", "Address": "3307 Brick Church Pike, Nashville, TN 37207", "Approx. Drive": "~5–7 min", "Status": "Existing / operating", "SF": null, "Use": "Public charter high school", "Base Jobs": null, "Jobs Basis": "2026–27 enrollment 614; staff count not separately verified", "Job Confidence": "Low", "Research Notes": "Web-verified Sept. 2026; see Job Research for source detail where available.", "Campus / Park": "Separate major employer", "Counting Treatment": "KEEP employer", "Verification Source": "3307 Brick Church Pike", "_lat": 36.24216, "_lon": -86.77941, "_id": 33}, {"Project / Employer": "Ricoh USA Inc. Nashville", "Address": "3444 Briley Park Blvd N, Nashville, TN 37207", "Approx. Drive": "~6–8 min", "Status": "Existing / operating", "SF": null, "Use": "Commercial equipment / printing / business services", "Base Jobs": null, "Jobs Basis": "Nashville site confirmed; site-level headcount not publicly verified", "Job Confidence": "Low", "Research Notes": "Web-verified Sept. 2026; see Job Research for source detail where available.", "Campus / Park": "Briley Park / outside the two park aggregates", "Counting Treatment": "KEEP employer", "Verification Source": "3444 Briley Park Blvd", "_lat": 36.2454, "_lon": -86.7809, "_id": 34}, {"Project / Employer": "Rock Nashville", "Address": "3200 Whites Creek Pike", "Approx. Drive": "~5–8 min", "Status": "Existing / operating", "SF": 610000, "Use": "Live entertainment production / rehearsal / vendor campus", "Base Jobs": 550, "Jobs Basis": "Current on-site employment", "Job Confidence": "High", "Research Notes": "Web-verified Sept. 2026; see Job Research for source detail where available.", "Campus / Park": null, "Counting Treatment": null, "Verification Source": null, "_lat": 36.24, "_lon": -86.8175, "_id": 35}, {"Project / Employer": "Servitech Industries", "Address": "550 Brick Church Park Dr, Nashville, TN 37207", "Approx. Drive": "~4–6 min", "Status": "Existing / operating", "SF": null, "Use": "Industrial metal finishing / coatings", "Base Jobs": null, "Jobs Basis": "Facility confirmed; local headcount not publicly verified", "Job Confidence": "Low", "Research Notes": "Web-verified Sept. 2026; see Job Research for source detail where available.", "Campus / Park": "Brick Church Business Park", "Counting Treatment": "KEEP employer; do not add park aggregate", "Verification Source": "550 Brick Church Park Dr", "_lat": 36.2291, "_lon": -86.7843, "_id": 36}, {"Project / Employer": "SouthernCarlson", "Address": "555 Brick Church Park Dr, Nashville, TN 37207", "Approx. Drive": "~4–6 min", "Status": "Existing / operating", "SF": null, "Use": "Construction / industrial supply distribution", "Base Jobs": null, "Jobs Basis": "Nashville branch confirmed; local headcount not publicly verified", "Job Confidence": "Low", "Research Notes": "Web-verified Sept. 2026; see Job Research for source detail where available.", "Campus / Park": "Brick Church Business Park", "Counting Treatment": "KEEP employer; do not add park aggregate", "Verification Source": "555 Brick Church Park Dr", "_lat": 36.2292, "_lon": -86.785, "_id": 37}, {"Project / Employer": "The Harbor Entertainment Group", "Address": "2608 Brick Church Pike, Nashville, TN 37207", "Approx. Drive": "~3–5 min", "Status": "Existing / operating", "SF": null, "Use": "Entertainment / event services", "Base Jobs": null, "Jobs Basis": "Current business listing confirms location; headcount not verified", "Job Confidence": "Low", "Research Notes": "Web-verified Sept. 2026; see Job Research for source detail where available.", "Campus / Park": null, "Counting Treatment": null, "Verification Source": null, "_lat": 36.21644, "_lon": -86.78098, "_id": 38}, {"Project / Employer": "Thompson Machinery ", "Address": "3366 Briley Park Blvd", "Approx. Drive": null, "Status": "existing", "SF": null, "Use": null, "Base Jobs": null, "Jobs Basis": null, "Job Confidence": null, "Research Notes": "Web-verified Sept. 2026; see Job Research for source detail where available.", "Campus / Park": null, "Counting Treatment": null, "Verification Source": null, "_lat": 36.244, "_lon": -86.7822, "_id": 39}, {"Project / Employer": "TriStar Skyline Medical Center", "Address": "3441 Dickerson Pike, Nashville, TN 37207", "Approx. Drive": "~7–9 min", "Status": "Existing / operating", "SF": null, "Use": "Hospital / health care", "Base Jobs": 1371, "Jobs Basis": "Hospital's current published staff statistic", "Job Confidence": "High", "Research Notes": "Web-verified Sept. 2026; see Job Research for source detail where available.", "Campus / Park": "Separate major employer", "Counting Treatment": "KEEP employer", "Verification Source": "3441 Dickerson Pike", "_lat": 36.2451, "_lon": -86.7504, "_id": 40}, {"Project / Employer": "Unarco Nashville", "Address": "3438 Briley Park Blvd N, Nashville, TN 37207", "Approx. Drive": "~6–8 min", "Status": "Existing / operating", "SF": null, "Use": "Material-handling / warehouse / industrial operations", "Base Jobs": null, "Jobs Basis": "Nashville location confirmed; company-wide employment is not location-specific", "Job Confidence": "Low", "Research Notes": "Web-verified Sept. 2026; see Job Research for source detail where available.", "Campus / Park": "Briley Park / outside the two park aggregates", "Counting Treatment": "KEEP employer", "Verification Source": "3438 Briley Park Blvd N", "_lat": 36.2456, "_lon": -86.7815, "_id": 41}, {"Project / Employer": "West View – 7021 Westbelt Dr", "Address": "7021 Westbelt Dr", "Approx. Drive": "~10 min / verify", "Status": "Planned / verify", "SF": 505682, "Use": "Bulk distribution / industrial", "Base Jobs": 350, "Jobs Basis": "Preliminary future midpoint; drive time/status still needs verification", "Job Confidence": "Low", "Research Notes": "Web-verified Sept. 2026; see Job Research for source detail where available.", "Campus / Park": null, "Counting Treatment": null, "Verification Source": null, "_lat": 36.16, "_lon": -86.92, "_id": 42}];
+const SUBJECT = {"_id": 0, "Project / Employer": "SUBJECT PROPERTY", "Address": "3309 Brick Church Pike, Nashville, TN 37207", "Status": "Subject property", "Use": "Development site", "Base Jobs": null, "_lat": 36.24205, "_lon": -86.77915};
+const STORAGE = 'BCP_LIVING_MAP_MASTER_V1';
+const SUBJECT_ID = 0;
+
+let records = [];
+let markers = {};
+let dragMode = false;
+let editingId = null;
+
+function esc(x){
+ return String(x ?? '').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+}
+function key(r){
+ return String(r["Project / Employer"]||'').trim().toLowerCase()+'|'+String(r["Address"]||'').trim().toLowerCase();
+}
+function initialRecords(){
+ const all=[SUBJECT,...ORIGINAL];
+ const seen=new Set(), out=[];
+ for(const r of all){
+   const k=key(r);
+   if(!seen.has(k)){seen.add(k);out.push(JSON.parse(JSON.stringify(r)));}
+ }
+ return out;
+}
+function load(){
+ try{
+   const s=JSON.parse(localStorage.getItem(STORAGE));
+   records=Array.isArray(s)&&s.length?s:initialRecords();
+ }catch(e){records=initialRecords();}
+}
+function persist(){localStorage.setItem(STORAGE,JSON.stringify(records));}
+function isSubject(r){return Number(r._id)===SUBJECT_ID;}
+function jobs(r){return r["Base Jobs"]==null||r["Base Jobs"]===''?'TBD':Number(r["Base Jobs"]).toLocaleString();}
+function label(r){
+ if(isSubject(r)) return '<div class="maplabel subject"><b>SUBJECT PROPERTY</b><div class="lj">3309 Brick Church Pike</div></div>';
+ const future=/future|planned|preliminary|approved|construction/i.test(String(r.Status||''));
+ return '<div class="maplabel '+(future?'future':'')+'"><b>'+esc(r["Project / Employer"])+'</b><div class="lj">'+jobs(r)+' jobs</div></div>';
+}
+function popup(r){
+ return '<div style="font-family:Arial"><div style="font-size:15px;font-weight:bold">'+esc(r["Project / Employer"])+'</div>'+
+ '<div style="font-size:11px;color:#555;margin:4px 0">'+esc(r.Address)+'</div><hr style="border:0;border-top:1px solid #ddd">'+
+ '<div><b>Estimated jobs:</b> '+jobs(r)+'</div>'+
+ '<div><b>Status:</b> '+esc(r.Status||'—')+'</div>'+
+ '<div><b>Use:</b> '+esc(r.Use||'—')+'</div>'+
+ (r["Job Confidence"]?'<div><b>Confidence:</b> '+esc(r["Job Confidence"])+'</div>':'')+
+ '<div style="margin-top:9px"><button onclick="editRecord('+r._id+')">Edit Record</button>'+
+ (isSubject(r)?'':' <button onclick="deleteRecord('+r._id+')">Delete</button>')+'</div></div>';
+}
+
+if(typeof L==='undefined'){
+ document.body.innerHTML='<div style="font-family:Arial;padding:30px"><h2>Map library did not load.</h2><p>This file requires internet access to load the map library and Metro Nashville GIS basemap. Please reopen it in a browser with internet access.</p></div>';
+ throw new Error('Leaflet failed to load');
+}
+
+const map=L.map('map').setView([36.242,-86.779],14);
+L.tileLayer('https://maps.nashville.gov/arcgis/rest/services/Basemaps/NashvilleBasemapMuted/MapServer/tile/{z}/{y}/{x}',{
+ maxZoom:20,attribution:'Metro Nashville / Davidson County GIS'
+}).addTo(map);
+
+function rebuild(){
+ Object.values(markers).forEach(m=>map.removeLayer(m));
+ markers={};
+ records.forEach(r=>{
+   const m=L.marker([Number(r._lat),Number(r._lon)],{
+     draggable:dragMode,
+     icon:L.divIcon({className:'',html:label(r),iconSize:null,iconAnchor:[0,0]})
+   }).bindPopup(popup(r)).addTo(map);
+   markers[r._id]=m;
+   m.on('dragend',()=>{
+     const q=m.getLatLng();
+     r._lat=q.lat;r._lon=q.lng;
+     persist();render();
+   });
+ });
+ render();
+}
+
+function toggleDrag(){
+ dragMode=!dragMode;
+ const b=document.getElementById('dragBtn');
+ b.classList.toggle('blue',dragMode);
+ b.textContent=dragMode?'Done Editing':'Edit Locations';
+ Object.values(markers).forEach(m=>dragMode?m.dragging.enable():m.dragging.disable());
+}
+
+function saveNow(){persist();alert('Saved to this browser.');}
+
+function resetMap(){
+ if(!confirm('Reset ALL changes, including additions, deletions, edits, and moved locations?')) return;
+ localStorage.removeItem(STORAGE);location.reload();
+}
+
+function exportJSON(){
+ const out=records.map(r=>{
+   const m=markers[r._id], q=m?m.getLatLng():{lat:r._lat,lng:r._lon};
+   return {...r,_lat:q.lat,_lon:q.lng};
+ });
+ const blob=new Blob([JSON.stringify(out,null,2)],{type:'application/json'});
+ const a=document.createElement('a');a.href=URL.createObjectURL(blob);
+ a.download='BCP_Living_Employment_Map_Data.json';a.click();
+ URL.revokeObjectURL(a.href);
+}
+
+function subjectView(){const m=markers[SUBJECT_ID];if(m){map.setView(m.getLatLng(),16);m.openPopup();}}
+function allView(){const a=Object.values(markers).map(m=>m.getLatLng());if(a.length)map.fitBounds(L.latLngBounds(a).pad(.08));}
+
+function render(){
+ const q=document.getElementById('search').value.trim().toLowerCase();
+ const filtered=records.filter(r=>(String(r["Project / Employer"])+' '+String(r.Address)+' '+String(r.Status||'')+' '+String(r.Use||'')).toLowerCase().includes(q));
+ document.getElementById('count').textContent=filtered.length+' of '+records.length+' records';
+ document.getElementById('tableWrap').innerHTML=
+ '<table><thead><tr><th>Property / Employer</th><th>Jobs</th><th>Status</th><th>Actions</th></tr></thead><tbody>'+
+ filtered.map(r=>'<tr class="'+(isSubject(r)?'subjectRow':'')+'">'+
+ '<td><div class="name">'+esc(r["Project / Employer"])+'</div><div class="addr">'+esc(r.Address)+'</div></td>'+
+ '<td class="jobs">'+jobs(r)+'</td><td class="status">'+esc(r.Status||'—')+'</td>'+
+ '<td class="actions"><button onclick="go('+r._id+')">Map</button>'+
+ '<button onclick="editRecord('+r._id+')">Edit</button>'+
+ (isSubject(r)?'':'<button onclick="deleteRecord('+r._id+')">Delete</button>')+
+ '</td></tr>').join('')+'</tbody></table>';
+}
+
+function go(id){const m=markers[id];if(m){map.setView(m.getLatLng(),17);m.openPopup();}}
+function removeDuplicates(){
+ const seen=new Set(), before=records.length;
+ records=records.filter(r=>{const k=key(r);if(seen.has(k))return false;seen.add(k);return true;});
+ persist();rebuild();
+ alert('Removed '+(before-records.length)+' exact duplicate record(s).');
+}
+
+function nextId(){return records.reduce((max,r)=>Math.max(max,Number(r._id)||0),0)+1;}
+
+function openForm(id=null){
+ editingId=id;
+ const r=id==null?null:records.find(x=>Number(x._id)===Number(id));
+ document.getElementById('formTitle').textContent=r?'Edit Property':'Add Property';
+ document.getElementById('fName').value=r?.["Project / Employer"]||'';
+ document.getElementById('fAddress').value=r?.Address||'';
+ document.getElementById('fJobs').value=r?.["Base Jobs"]??'';
+ document.getElementById('fStatus').value=r?.Status||'';
+ document.getElementById('fUse').value=r?.Use||'';
+ document.getElementById('fNotes').value=r?.["Research Notes"]||'';
+ const p=r?[Number(r._lat),Number(r._lon)]:[map.getCenter().lat,map.getCenter().lng];
+ document.getElementById('fLat').value=p[0].toFixed(6);
+ document.getElementById('fLon').value=p[1].toFixed(6);
+ document.getElementById('modal').style.display='flex';
+}
+function closeForm(){document.getElementById('modal').style.display='none';editingId=null;}
+
+function submitForm(){
+ const name=document.getElementById('fName').value.trim();
+ const address=document.getElementById('fAddress').value.trim();
+ if(!name||!address){alert('Business / Project and Address are required.');return;}
+ const lat=Number(document.getElementById('fLat').value), lon=Number(document.getElementById('fLon').value);
+ if(!Number.isFinite(lat)||!Number.isFinite(lon)){alert('Latitude and longitude must be valid numbers.');return;}
+ const jobsVal=document.getElementById('fJobs').value===''?null:Number(document.getElementById('fJobs').value);
+ const vals={
+   "Project / Employer":name,"Address":address,"Base Jobs":jobsVal,
+   "Status":document.getElementById('fStatus').value.trim(),
+   "Use":document.getElementById('fUse').value.trim(),
+   "Research Notes":document.getElementById('fNotes').value.trim(),
+   "_lat":lat,"_lon":lon
+ };
+ if(editingId==null){
+   vals._id=nextId(); records.push(vals);
+ }else{
+   const r=records.find(x=>Number(x._id)===Number(editingId));
+   if(!r)return;
+   Object.assign(r,vals);
+ }
+ persist();closeForm();rebuild();
+}
+
+function editRecord(id){openForm(id);}
+function deleteRecord(id){
+ const r=records.find(x=>Number(x._id)===Number(id));
+ if(!r||isSubject(r))return;
+ if(!confirm('Delete "'+r["Project / Employer"]+'" from the living map?'))return;
+ records=records.filter(x=>Number(x._id)!==Number(id));
+ persist();rebuild();
+}
+
+document.getElementById('search').addEventListener('input',render);
+load();rebuild();
+</script>
+</body>
+</html>
